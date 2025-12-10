@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Contas da Mana</title>
+    
+    <!-- Configurações de App (PWA) -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2344/2344132.png">
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2344/2344132.png">
+
+    <!-- Estilos e Ícones -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { -webkit-user-select: none; user-select: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
+        input, textarea, select { -webkit-user-select: text; user-select: text; }
+        
+        /* Transições suaves */
+        body, .mobile-container, header, .card-conta, button, select, input { transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+        
+        .mobile-container { max-width: 480px; margin: 0 auto; min-height: 100vh; box-shadow: 0 0 20px rgba(0,0,0,0.1); position: relative; padding-bottom: 90px; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .progress-bar { transition: width 1s ease-in-out; }
+        
+        /* Scrollbar escondida */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        /* Calendário Grid */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .calendar-day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 4px; position: relative; border-radius: 12px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: transform 0.1s; }
+        .calendar-day:active { transform: scale(0.90); }
+        .dot-container { display: flex; gap: 2px; justify-content: center; margin-top: 2px; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; }
+        
+        /* PIN dots */
+        .pin-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #ccc; transition: all 0.2s; }
+        .pin-dot.filled { background-color: #6366f1; border-color: #6366f1; }
+    </style>
+</head>
+<body id="body-global" class="bg-gray-100">
+
+<!-- NOTIFICAÇÃO (TOAST) -->
+<div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-white text-black px-6 py-3 rounded-full shadow-2xl opacity-0 transition-opacity duration-300 pointer-events-none z-[90] flex items-center gap-3 w-max max-w-[90%]">
+   <i id="toast-icon" class="fa-solid fa-circle-check text-green-600 text-xl"></i>
+   <span id="toast-msg" class="text-sm font-bold">Mensagem aqui</span>
+</div>
+
+<div id="app-container" class="mobile-container bg-white">
+    <!-- SELETOR DE TEMA -->
+    <div class="absolute top-6 right-6 z-50 flex gap-2 bg-white/10 backdrop-blur-md p-1.5 rounded-full border border-white/20 shadow-sm">
+        <button onclick="mudarTema('claro')" class="w-6 h-6 rounded-full bg-indigo-600 border-2 border-white shadow-sm transform hover:scale-110 transition" title="Claro"></button>
+        <button onclick="mudarTema('escuro')" class="w-6 h-6 rounded-full bg-black border-2 border-gray-600 shadow-sm transform hover:scale-110 transition" title="Escuro"></button>
+        <button onclick="mudarTema('roxo')" class="w-6 h-6 rounded-full bg-purple-600 border-2 border-pink-200 shadow-sm transform hover:scale-110 transition" title="Roxo"></button>
+    </div>
+
+    <!-- HEADER GERAL -->
+    <header id="header-home" class="bg-indigo-600 text-white p-6 rounded-b-3xl shadow-lg relative z-10">
+        <div class="flex justify-between items-center mb-4">
+            <div><p class="text-white/70 text-sm">Olá, Maninha 👋</p><h1 class="text-2xl font-bold" id="header-title">Contas do Mês</h1></div>
+            <div class="w-8"></div>
+        </div>
+        <div id="header-resumo" class="grid grid-cols-2 gap-3 mt-2">
+            <div id="card-resumo-1" class="bg-white/10 p-3 rounded-xl border border-white/20 backdrop-blur-sm">
+                <p class="text-xs text-white/70">Falta este mês</p><p class="text-lg font-bold text-white" id="total-pendente">R$ 0,00</p>
+            </div>
+            <div id="card-resumo-2" class="bg-white/10 p-3 rounded-xl border border-white/20 backdrop-blur-sm">
+                <p class="text-xs text-white/70">Pago este mês</p><p class="text-lg font-bold text-green-300" id="total-pago">R$ 0,00</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- NAVEGAÇÃO DE MÊS (Aparece na Home e Calendário) -->
+    <div id="nav-mes-wrapper" class="px-4 mt-4">
+        <div id="nav-mes-container" class="flex items-center justify-between w-full bg-gray-50 p-2 rounded-xl border border-gray-200">
+            <button onclick="mudarMes(-1)" id="btn-prev-mes" class="w-8 h-8 flex items-center justify-center rounded-full bg-white text-indigo-600 shadow hover:bg-indigo-50 transition"><i class="fa-solid fa-chevron-left"></i></button>
+            <h2 id="titulo-mes" class="font-bold text-gray-700 text-lg mx-2 min-w-[140px] text-center">Dezembro/2025</h2>
+            <button onclick="mudarMes(1)" id="btn-next-mes" class="w-8 h-8 flex items-center justify-center rounded-full bg-white text-indigo-600 shadow hover:bg-indigo-50 transition"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+    </div>
+
+    <!-- 1. ABA LISTA -->
+    <div id="view-home">
+        <div id="lista-contas" class="px-4 mt-2 space-y-3 pb-4 pt-2"></div>
+        <div id="empty-state-mes" class="hidden text-center py-10 opacity-60">
+            <i class="fa-regular fa-calendar-check text-4xl mb-2 text-gray-400"></i><p class="text-gray-500">Nenhuma conta para este mês.</p>
+        </div>
+    </div>
+
+    <!-- 2. ABA CALENDÁRIO -->
+    <div id="view-calendario" class="hidden px-4 mt-4 pb-4">
+        <div class="calendar-grid mb-2">
+            <div class="text-center text-xs font-bold text-gray-400">D</div><div class="text-center text-xs font-bold text-gray-400">S</div><div class="text-center text-xs font-bold text-gray-400">T</div><div class="text-center text-xs font-bold text-gray-400">Q</div><div class="text-center text-xs font-bold text-gray-400">Q</div><div class="text-center text-xs font-bold text-gray-400">S</div><div class="text-center text-xs font-bold text-gray-400">S</div>
+        </div>
+        <div id="calendar-days" class="calendar-grid"></div>
+        <div class="mt-6 flex justify-center gap-6 text-sm text-gray-500 font-medium">
+            <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500 shadow-sm"></div> A Pagar</div>
+            <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-green-500 shadow-sm"></div> Pago</div>
+        </div>
+    </div>
+
+    <!-- 3. ABA DASHBOARD (PREVISÃO NO TOPO) -->
+    <div id="view-dash" class="hidden px-4 mt-4 pb-4">
+        <!-- Filtros -->
+        <div class="space-y-3 mb-6">
+            <div class="relative">
+                <label class="block text-[10px] font-bold text-gray-400 mb-1 ml-1 uppercase">O QUE VOCÊ QUER VER?</label>
+                <select id="dash-filtro-item" onchange="renderizarDash()" class="w-full appearance-none bg-white border border-gray-200 text-gray-700 py-3 px-3 pr-8 rounded-xl font-bold text-sm focus:outline-none focus:border-indigo-500 shadow-sm">
+                    <option value="todos">Todos os Itens (Geral)</option>
+                    <!-- Opções injetadas via JS -->
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 mt-4 text-gray-500"><i class="fa-solid fa-chevron-down text-xs"></i></div>
+            </div>
+            <div class="relative">
+                <label class="block text-[10px] font-bold text-gray-400 mb-1 ml-1 uppercase">QUANDO?</label>
+                <select id="dash-filtro-periodo" onchange="toggleCustomDate()" class="w-full appearance-none bg-white border border-gray-200 text-gray-700 py-3 px-3 pr-8 rounded-xl font-bold text-sm focus:outline-none focus:border-indigo-500 shadow-sm">
+                    <!-- Opções injetadas via JS -->
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 mt-4 text-gray-500"><i class="fa-solid fa-calendar text-xs"></i></div>
+            </div>
+            <!-- Data Customizada -->
+            <div id="dash-custom-range" class="hidden grid grid-cols-2 gap-2 animate-slide-up">
+                <div><label class="block text-[10px] font-bold text-gray-400 mb-1 ml-1">DE</label><input type="date" id="dash-date-start" onchange="renderizarDash()" class="w-full bg-white border border-gray-200 text-gray-700 py-2 px-2 rounded-lg text-sm font-bold"></div>
+                <div><label class="block text-[10px] font-bold text-gray-400 mb-1 ml-1">ATÉ</label><input type="date" id="dash-date-end" onchange="renderizarDash()" class="w-full bg-white border border-gray-200 text-gray-700 py-2 px-2 rounded-lg text-sm font-bold"></div>
+            </div>
+        </div>
+
+        <!-- Previsão (Destaque Topo) -->
+        <div id="dash-previsao-card" class="mb-6">
+            <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
+                <i class="fa-solid fa-crystal-ball absolute -right-4 -bottom-4 text-8xl text-white opacity-10"></i>
+                <p class="text-indigo-100 text-xs font-bold uppercase tracking-wider mb-1">Previsão Acumulada</p>
+                <p class="text-sm opacity-90 mb-2" id="dash-previsao-label">Até o fim do período selecionado</p>
+                <p class="text-3xl font-extrabold" id="dash-total-previsao">R$ 0,00</p>
+                <div class="mt-2 text-[10px] bg-white/20 inline-block px-2 py-1 rounded text-white font-medium"><i class="fa-solid fa-calculator mr-1"></i> Inclui parcelas futuras</div>
+            </div>
+        </div>
+
+        <!-- Totais Dash -->
+        <div class="flex gap-3 mb-6">
+            <div class="flex-1 bg-green-50 border border-green-100 p-4 rounded-2xl text-center shadow-sm">
+                <p class="text-xs text-green-600 font-bold uppercase mb-1">Pago</p>
+                <p class="text-xl font-bold text-green-700" id="dash-total-pago">R$ 0</p>
+            </div>
+            <div class="flex-1 bg-red-50 border border-red-100 p-4 rounded-2xl text-center shadow-sm">
+                <p class="text-xs text-red-600 font-bold uppercase mb-1">Pendente</p>
+                <p class="text-xl font-bold text-red-700" id="dash-total-pendente">R$ 0</p>
+            </div>
+        </div>
+
+        <!-- Lista Detalhada -->
+        <h3 id="dash-title-chart" class="font-bold text-gray-700 text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-list-check text-indigo-500"></i> Detalhes</h3>
+        <div id="dash-chart-container" class="space-y-2"></div>
+        <div class="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center"><p class="text-gray-500 text-sm font-medium">Total Selecionado</p><p class="text-2xl font-bold text-indigo-900" id="dash-total-geral">R$ 0,00</p></div>
+    </div>
+
+    <!-- 4. ABA METAS (DÍVIDAS) -->
+    <div id="view-metas" class="hidden">
+        <div class="px-6 mt-6 mb-2"><h2 id="titulo-dividas" class="font-bold text-gray-700 text-lg">Dívidas Antigas</h2><p class="text-xs text-gray-500">Backlog de pagamentos</p></div>
+        <div class="px-4 mb-4">
+            <div id="card-meta" class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg text-white">
+                <div class="flex justify-between items-end mb-2"><p class="text-sm text-white/70">Progresso da Quitação</p><p class="text-2xl font-bold text-white" id="total-divida-restante">R$ 0,00</p></div>
+                <div class="w-full bg-black/30 rounded-full h-3 mb-1"><div id="barra-progresso" class="bg-gradient-to-r from-orange-500 to-yellow-400 h-3 rounded-full progress-bar" style="width: 0%"></div></div>
+                <div class="flex justify-between text-xs text-white/50 mt-1"><span>0%</span><span id="label-progresso">Meta: Limpar Nome</span></div>
+            </div>
+        </div>
+        <div id="lista-dividas" class="px-4 space-y-3 pb-4"></div>
+    </div>
+
+    <!-- 5. ABA ACESSOS (SENHAS) -->
+    <div id="view-acessos" class="hidden">
+        <!-- Bloqueio -->
+        <div id="login-wall" class="flex flex-col items-center justify-center h-[60vh] px-6">
+            <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-3xl text-indigo-600 mb-6"><i class="fa-solid fa-lock"></i></div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2" id="acessos-title">Acesso Protegido</h2>
+            <p class="text-gray-500 text-center mb-8">Digite o PIN para ver as senhas.</p>
+            <div class="flex gap-4 mb-8"><div class="pin-dot" id="dot-1"></div><div class="pin-dot" id="dot-2"></div><div class="pin-dot" id="dot-3"></div><div class="pin-dot" id="dot-4"></div></div>
+            <div class="grid grid-cols-3 gap-6 w-full max-w-[280px]">
+                <button onclick="addPin(1)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">1</button><button onclick="addPin(2)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">2</button><button onclick="addPin(3)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">3</button><button onclick="addPin(4)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">4</button><button onclick="addPin(5)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">5</button><button onclick="addPin(6)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">6</button><button onclick="addPin(7)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">7</button><button onclick="addPin(8)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">8</button><button onclick="addPin(9)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">9</button><div></div><button onclick="addPin(0)" class="h-14 rounded-full bg-gray-50 text-xl font-bold text-gray-700 shadow-sm hover:bg-gray-100">0</button><button onclick="clearPin()" class="h-14 rounded-full text-xl text-red-400 hover:text-red-600 flex items-center justify-center"><i class="fa-solid fa-delete-left"></i></button>
+            </div>
+        </div>
+        <!-- Conteúdo Liberado -->
+        <div id="acessos-content" class="hidden px-4 mt-6 pb-24">
+            <div class="flex justify-between items-center mb-4"><h2 id="titulo-acessos" class="font-bold text-gray-700 text-lg">Cofre de Senhas & Notas</h2><button onclick="bloquearAcessos()" class="text-sm text-gray-400 hover:text-indigo-600"><i class="fa-solid fa-lock"></i> Bloquear</button></div><div id="lista-credenciais" class="space-y-4"></div><div class="mt-8 text-center"><p class="text-xs text-gray-400">Use apenas em caso de emergência.<br>Não compartilhe o PIN.</p></div>
+        </div>
+    </div>
+
+    <!-- MENU INFERIOR -->
+    <nav id="nav-bottom" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-between px-2 items-center h-16 max-w-[480px] mx-auto z-40">
+        <button onclick="trocarAba('home')" id="tab-home" class="flex flex-col items-center text-indigo-600 flex-1 h-full justify-center active:bg-gray-50 transition"><i class="fa-solid fa-list-ul text-xl mb-1"></i><span class="text-[10px] font-medium">Lista</span></button>
+        <button onclick="trocarAba('calendario')" id="tab-calendario" class="flex flex-col items-center text-gray-400 flex-1 h-full justify-center active:bg-gray-50 transition"><i class="fa-solid fa-calendar-days text-xl mb-1"></i><span class="text-[10px] font-medium">Calendário</span></button>
+        <button onclick="trocarAba('dash')" id="tab-dash" class="flex flex-col items-center text-gray-400 flex-1 h-full justify-center active:bg-gray-50 transition"><i class="fa-solid fa-chart-simple text-xl mb-1"></i><span class="text-[10px] font-medium">Dash</span></button>
+        <button onclick="trocarAba('metas')" id="tab-metas" class="flex flex-col items-center text-gray-400 flex-1 h-full justify-center active:bg-gray-50 transition"><i class="fa-solid fa-bullseye text-xl mb-1"></i><span class="text-[10px] font-medium">Dívidas</span></button>
+        <button onclick="trocarAba('acessos')" id="tab-acessos" class="flex flex-col items-center text-gray-400 flex-1 h-full justify-center active:bg-gray-50 transition"><i class="fa-solid fa-key text-xl mb-1"></i><span class="text-[10px] font-medium">Senhas</span></button>
+    </nav>
+
+    <button id="btn-add" onclick="abrirModalNovaConta()" class="fixed bottom-20 right-[calc(50%-20px)] mobile-fab bg-indigo-600 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl hover:bg-indigo-700 transition transform hover:scale-110 active:scale-95 z-50"><i class="fa-solid fa-plus"></i></button>
+    <button id="btn-add-acesso" onclick="abrirModalNovoAcesso()" class="hidden fixed bottom-20 right-[calc(50%-20px)] mobile-fab bg-slate-800 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl hover:bg-slate-700 transition transform hover:scale-110 active:scale-95 z-50"><i class="fa-solid fa-plus"></i></button>
+</div>
+
+<!-- MODAL DIA (CALENDÁRIO) -->
+<div id="modal-dia" class="fixed inset-0 bg-black/60 z-[60] hidden flex items-end sm:items-center justify-center backdrop-blur-sm transition-all" onclick="if(event.target === this) fecharResumoDia()"><div id="modal-dia-content" class="bg-white w-full max-w-[480px] rounded-t-3xl sm:rounded-2xl p-6 transform transition-all animate-slide-up shadow-2xl h-[70vh] flex flex-col"><div class="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4 flex-shrink-0"></div><div class="flex justify-between items-center mb-4 flex-shrink-0"><h2 id="titulo-dia" class="text-xl font-bold text-gray-800">Contas do Dia</h2><button onclick="fecharResumoDia()" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div><div id="lista-contas-dia" class="flex-1 overflow-y-auto space-y-3 pb-4"></div><button onclick="fecharResumoDia()" class="w-full py-3 mt-2 bg-gray-100 text-gray-600 font-bold rounded-xl flex-shrink-0">Voltar para Calendário</button></div></div>
+<div id="modal-detalhes" class="fixed inset-0 bg-black/60 z-[70] hidden flex items-end sm:items-center justify-center backdrop-blur-sm transition-all" onclick="if(event.target === this) fecharModal()"><div id="modal-content" class="bg-white w-full max-w-[480px] rounded-t-3xl sm:rounded-2xl p-6 transform transition-all animate-slide-up shadow-2xl relative"><div id="confirm-overlay" class="absolute inset-0 bg-white/95 rounded-t-3xl z-20 hidden flex flex-col items-center justify-center p-6 text-center" onclick="event.stopPropagation()"><div class="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center text-3xl mb-4"><i id="confirm-icon" class="fa-solid fa-trash-can"></i></div><h3 class="text-xl font-bold text-gray-800 mb-2" id="confirm-title">Tem certeza?</h3><p class="text-gray-500 text-sm mb-6" id="confirm-desc">Ação irreversível.</p><div class="flex gap-3 w-full"><button onclick="fecharConfirmacao()" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold">Voltar</button><button id="btn-confirm-action" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold">Continuar</button></div></div><div id="quitacao-overlay" class="absolute inset-0 bg-white rounded-t-3xl z-30 hidden flex flex-col p-6" onclick="event.stopPropagation()"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-gray-800">Antecipar Parcelas</h3><button onclick="fecharQuitacao()" class="text-gray-400 hover:text-gray-600 text-xl"><i class="fa-solid fa-xmark"></i></button></div><div class="flex-1 flex flex-col items-center justify-start pt-4"><p class="text-gray-500 text-sm mb-4 text-center">Quantas parcelas quer pagar?</p><div class="flex items-center justify-center gap-6 mb-6 w-full"><button onclick="mudarQtdQuitacao(-1)" class="w-12 h-12 rounded-full bg-gray-100 text-gray-600 font-bold text-xl hover:bg-gray-200 transition shadow-sm active:scale-95">-</button><div class="text-center"><span id="q-qtd" class="text-6xl font-extrabold text-indigo-600 leading-none">1</span><p class="text-xs text-gray-400 font-bold uppercase mt-2 tracking-widest">Parcelas</p></div><button onclick="mudarQtdQuitacao(1)" class="w-12 h-12 rounded-full bg-gray-100 text-gray-600 font-bold text-xl hover:bg-gray-200 transition shadow-sm active:scale-95">+</button></div><div class="bg-gray-50 p-5 rounded-2xl w-full border border-gray-100 shadow-inner"><div class="flex justify-between mb-3"><span class="text-sm text-gray-500">Intervalo:</span><span id="q-resumo-parcelas" class="font-bold text-gray-700">3/12</span></div><div class="flex justify-between mb-3"><span class="text-sm text-gray-500">Valor Unitário:</span><span id="q-valor-unit" class="font-medium text-gray-700">R$ 0,00</span></div><div class="flex flex-col pt-3 border-t border-gray-200 mt-2"><span class="text-sm font-bold text-gray-800 mb-1">TOTAL A PAGAR (Editável):</span><div class="relative"><span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-600 font-extrabold text-lg">R$</span><input type="number" id="q-total-valor" step="0.01" class="w-full pl-10 pr-4 py-2 border-2 border-green-200 rounded-xl text-2xl font-extrabold text-green-600 focus:outline-none focus:border-green-500 bg-white" placeholder="0.00"></div></div></div></div><button onclick="concluirQuitacao()" class="w-full py-4 bg-green-500 text-white rounded-xl font-bold shadow-lg hover:bg-green-600 transition text-lg mt-4">Confirmar Pagamento</button></div>
+        <div class="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
+        <div class="flex justify-between items-start">
+            <div class="w-full mr-4">
+                <div class="flex gap-2 mb-1 flex-wrap">
+                    <span id="modal-badge" class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 inline-block">Categoria</span>
+                    <span id="modal-parcela" class="hidden px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-600 inline-block">1/12</span>
+                    <span id="modal-recorrente-tag" class="hidden px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-600 border border-blue-200"><i class="fa-solid fa-rotate mr-1"></i>Recorrente</span>
+                </div>
+                <div id="display-nome" class="flex items-center gap-2"><h2 id="modal-nome" class="text-2xl font-bold text-gray-800 leading-tight truncate">Nome</h2><button onclick="ativarEdicaoNome()" class="text-gray-400 hover:text-indigo-600 p-1"><i class="fa-solid fa-pen-to-square"></i></button></div>
+                <div id="input-nome-container" class="hidden flex items-center gap-2 mt-1 w-full"><input type="text" id="input-novo-nome" class="border-2 border-indigo-200 rounded-lg px-3 py-1 w-full font-bold text-gray-700 text-lg"><button onclick="salvarNovoNome()" class="bg-green-500 text-white rounded-lg p-2 w-10 hover:bg-green-600 shadow"><i class="fa-solid fa-check"></i></button></div>
+            </div>
+            <div class="flex flex-col items-center gap-2">
+                <button onclick="fecharModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
+                <button onclick="confirmarExclusao()" class="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+        </div>
+        <div id="modal-valor-box" class="my-6 text-center bg-gray-50 rounded-2xl p-4 border border-gray-100">
+            <p class="text-gray-500 text-xs uppercase tracking-wide font-bold">Valor a Pagar</p>
+            <div id="display-valor" class="flex items-center justify-center gap-2"><p id="modal-valor" class="text-4xl font-extrabold text-indigo-600 my-1">R$ 0,00</p><button onclick="ativarEdicaoValor()" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600 transition flex items-center justify-center"><i class="fa-solid fa-pen-to-square"></i></button></div>
+            <div id="input-valor-container" class="hidden flex items-center justify-center gap-2 my-1"><input type="number" id="input-novo-valor" step="0.01" class="pl-4 pr-4 py-2 border-2 border-indigo-200 rounded-xl w-32 text-xl font-bold text-indigo-700 text-center" placeholder="0.00"><button onclick="salvarNovoValor()" class="w-10 h-10 rounded-xl bg-green-500 text-white hover:bg-green-600 transition"><i class="fa-solid fa-check"></i></button></div>
+            <div class="flex items-center justify-center gap-2 mt-3"><p class="text-sm font-medium" id="modal-vencimento">Vencimento</p></div>
+        </div>
+        <div class="space-y-3">
+            <button id="btn-agenda" onclick="adicionarAoCalendario()" class="w-full py-3 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-100 transition"><i class="fa-regular fa-calendar-plus"></i> Agendar Pagamento</button>
+            <button id="btn-cancelar-recorrencia" onclick="confirmarPararRecorrencia()" class="hidden w-full py-3 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 transition"><i class="fa-solid fa-ban"></i> Parar Recorrência (Futuras)</button>
+            <button id="btn-quitar-parcelas" onclick="abrirQuitacao()" class="hidden w-full py-3 bg-yellow-50 text-yellow-700 border border-yellow-100 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-yellow-100 transition"><i class="fa-solid fa-sack-dollar"></i> Quitar / Antecipar</button>
+            
+            <!-- BOTÃO PAGAR UNIFICADO (SEM COBRAR) -->
+            <div class="pt-2">
+                <button onclick="alterarStatus('pago')" class="w-full py-3 bg-green-500 text-white shadow-lg shadow-green-200 rounded-xl font-bold hover:bg-green-600 active:scale-95 transition text-lg"><i class="fa-solid fa-check mr-2"></i> Confirmar Pagamento (Paguei!)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL NOVO ACESSO -->
+<div id="modal-novo-acesso" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-end sm:items-center justify-center backdrop-blur-sm transition-all" onclick="if(event.target === this) fecharModalNovoAcesso()"><div id="modal-novo-acesso-content" class="bg-white w-full max-w-[480px] rounded-t-3xl sm:rounded-2xl p-6 transform transition-all animate-slide-up shadow-2xl"><div class="flex justify-between items-center mb-6"><h2 class="text-xl font-bold text-gray-800">Novo Acesso</h2><button onclick="fecharModalNovoAcesso()" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-500 mb-1">Tipo de Item</label><div class="grid grid-cols-2 gap-2"><button id="btn-type-login" onclick="toggleAcessoType('login')" class="py-2 border-2 rounded-lg font-bold text-sm">Login / Site</button><button id="btn-type-note" onclick="toggleAcessoType('note')" class="py-2 border-2 rounded-lg font-bold text-sm">Nota Rápida</button></div><input type="hidden" id="acc-type" value="login"></div><div><label class="block text-sm font-medium text-gray-500">Título / Plataforma</label><input type="text" id="acc-nome" class="w-full border rounded-lg px-3 py-2" placeholder="Ex: Banco Inter"></div><div id="fields-login" class="space-y-4"><div><label class="block text-sm font-medium text-gray-500">Link / Site</label><input type="text" id="acc-link" class="w-full border rounded-lg px-3 py-2" placeholder="https://..."></div><div><label class="block text-sm font-medium text-gray-500">Usuário / Login</label><input type="text" id="acc-user" class="w-full border rounded-lg px-3 py-2"></div><div><label class="block text-sm font-medium text-gray-500">Senha</label><input type="text" id="acc-pass" class="w-full border rounded-lg px-3 py-2"></div></div><div><label class="block text-sm font-medium text-gray-500">Observações / Anotação</label><textarea id="acc-obs" class="w-full border rounded-lg px-3 py-2 text-sm" rows="3" placeholder="Escreva aqui..."></textarea></div><button onclick="salvarNovoAcesso()" class="w-full py-4 bg-slate-800 text-white rounded-xl font-bold mt-4">Salvar no Cofre</button></div></div></div>
+<div id="modal-nova-conta" class="fixed inset-0 bg-black/60 z-[60] hidden flex items-end sm:items-center justify-center backdrop-blur-sm transition-all" onclick="if(event.target === this) fecharModalNovaConta()"><div id="modal-nova-content" class="bg-white w-full max-w-[480px] rounded-t-3xl sm:rounded-2xl p-6 transform transition-all animate-slide-up shadow-2xl h-[90vh] sm:h-auto overflow-y-auto"><div class="flex justify-between items-center mb-6"><h2 id="titulo-nova-conta" class="text-xl font-bold text-gray-800">Nova Conta</h2><button onclick="fecharModalNovaConta()" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-500 mb-1">Onde entra?</label><div class="grid grid-cols-2 gap-2"><button id="btn-tipo-mensal" onclick="selecionarTipo('mensal')" class="py-2 border-2 rounded-lg font-bold text-sm">Conta do Mês</button><button id="btn-tipo-divida" onclick="selecionarTipo('divida')" class="py-2 border-2 rounded-lg font-bold text-sm">Dívida Antiga</button></div><input type="hidden" id="novo-tipo" value="mensal"></div><div id="area-recorrencia" class="bg-gray-50 p-3 rounded-lg border border-gray-200"><label class="block text-sm font-medium text-gray-500 mb-2">Frequência</label><div class="flex gap-4 mb-2"><label class="flex items-center gap-2"><input type="radio" name="recorrencia" value="fixo" checked onchange="toggleParcelas(false)" class="text-indigo-600"> <span class="text-sm">Recorrente</span></label><label class="flex items-center gap-2"><input type="radio" name="recorrencia" value="parcelado" onchange="toggleParcelas(true)" class="text-indigo-600"> <span class="text-sm">Parcelado</span></label></div><div id="input-qtd-parcelas" class="hidden mt-2"><label class="block text-xs font-bold text-gray-400">TOTAL</label><input type="number" id="novo-total-parcelas" class="w-20 border rounded px-2 py-1" placeholder="12"></div></div><div><label class="block text-sm font-medium text-gray-500">Nome</label><input type="text" id="novo-nome" class="w-full border rounded-lg px-3 py-2"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-500">Valor</label><input type="number" id="novo-valor" class="w-full border rounded-lg px-3 py-2"></div><div><label class="block text-sm font-medium text-gray-500">Vencimento</label><input type="date" id="novo-vencimento" class="w-full border rounded-lg px-3 py-2"></div></div><div><label class="block text-sm font-medium text-gray-500">Categoria</label><select id="novo-categoria" class="w-full border rounded-lg px-3 py-2 bg-white"><option>Casa</option><option>Cartão</option><option>Internet</option><option>Eletrônicos</option><option>Outros</option></select></div><button id="btn-salvar-novo" onclick="salvarNovaConta()" class="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold mt-4">Salvar</button></div></div></div>
+
+<script>
+    // --- TEMAS ---
+    const temas = {
+        claro: { body: 'bg-gray-100', container: 'bg-white', headerHome: 'bg-indigo-600', textPrimary: 'text-gray-800', textSecondary: 'text-gray-500', cardBg: 'bg-white', cardBorder: 'border-gray-100', navBg: 'bg-white', navBorder: 'border-gray-200', navActive: 'text-indigo-600', navInactive: 'text-gray-400', btnAdd: 'bg-indigo-600 text-white', modalBg: 'bg-white', modalText: 'text-gray-800', inputBg: 'bg-white', inputBorder: 'border-gray-300', inputText: 'text-gray-900', highlight: 'text-indigo-600', navMesBg: 'bg-gray-50', navMesBorder: 'border-gray-200', navMesText: 'text-gray-700', navBtnBg: 'bg-white', navBtnText: 'text-indigo-600', calDayBg: 'bg-gray-50', calDayHover: 'hover:bg-gray-100', wallTitle: 'text-gray-800', wallText: 'text-gray-500', pinEmpty: 'bg-gray-200', pinFilled: 'bg-indigo-600 border-indigo-600', noteBg: 'bg-yellow-50', noteBorder: 'border-yellow-100', noteText: 'text-gray-700', selectBg: 'bg-white', selectText: 'text-gray-700' },
+        escuro: { body: 'bg-black', container: 'bg-[#121212]', headerHome: 'bg-neutral-900', textPrimary: 'text-gray-200', textSecondary: 'text-gray-400', cardBg: 'bg-[#1E1E1E]', cardBorder: 'border-neutral-800', navBg: 'bg-[#121212]', navBorder: 'border-neutral-800', navActive: 'text-indigo-400', navInactive: 'text-gray-600', btnAdd: 'bg-white text-black', modalBg: 'bg-[#1E1E1E]', modalText: 'text-white', inputBg: 'bg-neutral-800', inputBorder: 'border-neutral-700', inputText: 'text-white', highlight: 'text-indigo-400', navMesBg: 'bg-neutral-900', navMesBorder: 'border-neutral-800', navMesText: 'text-gray-200', navBtnBg: 'bg-neutral-800', navBtnText: 'text-white', calDayBg: 'bg-neutral-900', calDayHover: 'hover:bg-neutral-800', wallTitle: 'text-white', wallText: 'text-gray-400', pinEmpty: 'bg-neutral-800 border-neutral-700', pinFilled: 'bg-indigo-500 border-indigo-500', noteBg: 'bg-yellow-900/20', noteBorder: 'border-yellow-900/30', noteText: 'text-yellow-100', selectBg: 'bg-neutral-800', selectText: 'text-white' },
+        roxo: { body: 'bg-purple-100', container: 'bg-white', headerHome: 'bg-purple-700', textPrimary: 'text-purple-900', textSecondary: 'text-gray-500', cardBg: 'bg-white', cardBorder: 'border-purple-100', navBg: 'bg-white', navBorder: 'border-purple-100', navActive: 'text-purple-700', navInactive: 'text-purple-300', btnAdd: 'bg-purple-600 text-white', modalBg: 'bg-white', modalText: 'text-purple-900', inputBg: 'bg-purple-50', inputBorder: 'border-purple-200', inputText: 'text-purple-900', highlight: 'text-purple-600', navMesBg: 'bg-purple-50', navMesBorder: 'border-purple-100', navMesText: 'text-purple-900', navBtnBg: 'bg-white', navBtnText: 'text-purple-600', calDayBg: 'bg-purple-50', calDayHover: 'hover:bg-purple-100', wallTitle: 'text-purple-900', wallText: 'text-gray-500', pinEmpty: 'bg-purple-100', pinFilled: 'bg-purple-600 border-purple-600', noteBg: 'bg-yellow-50', noteBorder: 'border-yellow-100', noteText: 'text-gray-700', selectBg: 'bg-white', selectText: 'text-purple-900' }
+    };
+
+    let temaAtual = 'claro';
+    let dataNavegacao = new Date('2025-12-01T12:00:00'); 
+    let quitacaoQtd = 1;
+    let pinDigitado = "";
+    const PIN_CORRETO = "9524";
+
+    let contas = [
+        { id: 1, rootId: 'fixo_1', type: 'mensal', nome: 'Aluguel Apto', valor: 1200.00, vencimento: '2025-12-05', categoria: 'Casa', status: 'atrasado', parcelas: null, recorrencia: true },
+        { id: 2, rootId: 'fixo_2', type: 'mensal', nome: 'Vivo Fibra', valor: 120.00, vencimento: '2025-12-10', categoria: 'Internet', status: 'pago', parcelas: null, recorrencia: true },
+        { id: 3, rootId: 'iphone_15_plan', type: 'mensal', nome: 'iPhone 15', valor: 350.00, vencimento: '2025-12-20', categoria: 'Eletrônicos', status: 'pendente', parcelas: {atual: 3, total: 12}, recorrencia: false },
+        { id: 10, rootId: null, type: 'divida', nome: 'MEI - Parcela 01/05', valor: 70.00, vencimento: '2025-08-20', categoria: 'MEI', status: 'atrasado', parcelas: null },
+    ];
+
+    let acessos = [
+        { id: 1, type: 'login', nome: 'Banco Inter', link: 'https://inter.co', user: 'minhaconta@gmail.com', pass: 'SenhaForte123', obs: 'Token chega por SMS.' },
+        { id: 2, type: 'note', nome: 'Chave do Cofre', obs: 'A combinação é: Esquerda 20, Direita 40, Esquerda 10.' },
+        { id: 3, type: 'login', nome: 'Gov.br (MEI)', link: 'https://gov.br', user: '123.456.789-00', pass: 'Brasil2025', obs: '' }
+    ];
+
+    let contaSelecionadaId = null;
+
+    // --- FUNÇÃO CRÍTICA RECUPERADA ---
+    function renderizarTudo() {
+        const mesAtual = dataNavegacao.getMonth();
+        const anoAtual = dataNavegacao.getFullYear();
+        gerarContasFuturas(mesAtual, anoAtual);
+
+        const listaMensal = document.getElementById('lista-contas');
+        const listaDividas = document.getElementById('lista-dividas');
+        if(listaMensal) listaMensal.innerHTML = '';
+        if(listaDividas) listaDividas.innerHTML = '';
+
+        let mensalPendente = 0, mensalPago = 0, dividaTotal = 0, dividaPaga = 0, temContaNoMes = false;
+
+        const elTit = document.getElementById('titulo-mes');
+        if(elTit) elTit.innerText = `${dataNavegacao.toLocaleDateString('pt-BR', { month: 'long' }).replace(/^\w/, c => c.toUpperCase())}/${anoAtual}`;
+
+        contas.sort((a, b) => {
+            if(a.status === b.status) return new Date(a.vencimento) - new Date(b.vencimento);
+            const peso = { 'atrasado': 1, 'pendente': 2, 'aguardando': 3, 'pago': 4 };
+            return peso[a.status] - peso[b.status];
+        });
+
+        contas.forEach(conta => {
+            const card = criarCardHTML(conta);
+            if (conta.type === 'mensal') {
+                const d = new Date(conta.vencimento);
+                if (d.getUTCMonth() === mesAtual && d.getUTCFullYear() === anoAtual) {
+                    if(listaMensal) listaMensal.innerHTML += card;
+                    temContaNoMes = true;
+                    if(conta.status === 'pago') mensalPago += conta.valor;
+                    else mensalPendente += conta.valor;
+                }
+            } else {
+                if(listaDividas) listaDividas.innerHTML += card;
+                dividaTotal += conta.valor;
+                if(conta.status === 'pago') dividaPaga += conta.valor;
+            }
+        });
+
+        const empty = document.getElementById('empty-state-mes');
+        if(empty) {
+             if(!temContaNoMes) empty.classList.remove('hidden'); else empty.classList.add('hidden');
+        }
+
+        renderizarCalendario(mesAtual, anoAtual);
+        renderizarDash(); 
+
+        const elPen = document.getElementById('total-pendente'); if(elPen) elPen.innerText = formatarMoeda(mensalPendente);
+        const elPag = document.getElementById('total-pago'); if(elPag) elPag.innerText = formatarMoeda(mensalPago);
+        const elDivRest = document.getElementById('total-divida-restante'); if(elDivRest) elDivRest.innerText = formatarMoeda(dividaTotal - dividaPaga);
+        
+        const pct = dividaTotal === 0 ? 100 : (dividaPaga / dividaTotal) * 100;
+        const elBar = document.getElementById('barra-progresso'); if(elBar) elBar.style.width = `${pct}%`;
+        const elLab = document.getElementById('label-progresso'); if(elLab) elLab.innerText = `Pago: ${Math.round(pct)}%`;
+    }
+
+    // --- OUTRAS FUNÇÕES ---
+    function gerarOpcoesPeriodo() {
+        const select = document.getElementById('dash-filtro-periodo');
+        if(!select) return;
+        let html = `<option value="maximo">Máximo (Tudo)</option><option value="custom">📅 Personalizado</option>`;
+        const hoje = new Date();
+        const start = new Date(hoje.getFullYear(), hoje.getMonth() - 6, 1);
+        for (let i = 0; i < 18; i++) {
+            const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+            const value = `${d.getMonth()}_${d.getFullYear()}`;
+            const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+            const isSelected = (d.getMonth() === dataNavegacao.getMonth() && d.getFullYear() === dataNavegacao.getFullYear()) ? 'selected' : '';
+            html += `<option value="${value}" ${isSelected}>${label.charAt(0).toUpperCase() + label.slice(1)}</option>`;
+        }
+        select.innerHTML = html;
+    }
+
+    function toggleCustomDate() {
+        const el = document.getElementById('dash-filtro-periodo');
+        const divCustom = document.getElementById('dash-custom-range');
+        if (el && el.value === 'custom') { if(divCustom) divCustom.classList.remove('hidden'); } else { if(divCustom) divCustom.classList.add('hidden'); renderizarDash(); }
+    }
+
+    function renderizarDash() {
+        const filtroPeriodo = document.getElementById('dash-filtro-periodo');
+        if (filtroPeriodo && filtroPeriodo.options.length === 0) gerarOpcoesPeriodo();
+        
+        const periodoVal = filtroPeriodo ? filtroPeriodo.value : 'maximo';
+        const filtroItem = document.getElementById('dash-filtro-item');
+        const itemSelecionado = filtroItem ? filtroItem.value : 'todos';
+
+        if(filtroItem) {
+            const uniqueNames = [...new Set(contas.map(c => c.nome))].sort();
+            let optionsHtml = `<option value="todos">Todos os Itens (Geral)</option>`;
+            uniqueNames.forEach(name => { optionsHtml += `<option value="${name}" ${name === itemSelecionado ? 'selected' : ''}>${name}</option>`; });
+            if (document.activeElement !== filtroItem) filtroItem.innerHTML = optionsHtml;
+        }
+
+        let startFilterDate = null;
+        let endFilterDate = null;
+
+        if (periodoVal === 'maximo') { startFilterDate = new Date(1970, 0, 1); endFilterDate = new Date(2100, 0, 1); }
+        else if (periodoVal === 'custom') { 
+            const sEl = document.getElementById('dash-date-start');
+            const eEl = document.getElementById('dash-date-end');
+            if (sEl && eEl && sEl.value && eEl.value) { startFilterDate = new Date(sEl.value); endFilterDate = new Date(eEl.value); endFilterDate.setHours(23, 59, 59, 999); } 
+        }
+        else { 
+            const parts = periodoVal.split('_'); 
+            if(parts.length === 2) { const pMes = parseInt(parts[0]); const pAno = parseInt(parts[1]); startFilterDate = new Date(pAno, pMes, 1); endFilterDate = new Date(pAno, pMes + 1, 0); endFilterDate.setHours(23, 59, 59, 999); } 
+        }
+
+        if (!startFilterDate || !endFilterDate) { const hoje = dataNavegacao; startFilterDate = new Date(hoje.getFullYear(), hoje.getMonth(), 1); endFilterDate = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); }
+
+        let totalProjetado = calcularPrevisao(startFilterDate, endFilterDate, itemSelecionado);
+
+        let contasFiltradas = contas.filter(c => {
+            if (c.type !== 'mensal') return false; 
+            if (itemSelecionado !== 'todos' && c.nome !== itemSelecionado) return false;
+            const d = new Date(c.vencimento);
+            return d.getTime() >= startFilterDate.getTime() && d.getTime() <= endFilterDate.getTime();
+        }).sort((a,b) => new Date(a.vencimento) - new Date(b.vencimento));
+
+        const totalPago = contasFiltradas.filter(c => c.status === 'pago').reduce((acc,c)=>acc+c.valor,0);
+        const totalPendente = contasFiltradas.filter(c => c.status !== 'pago').reduce((acc,c)=>acc+c.valor,0);
+        
+        const elPago = document.getElementById('dash-total-pago'); if(elPago) elPago.innerText = formatarMoeda(totalPago);
+        const elPen = document.getElementById('dash-total-pendente'); if(elPen) elPen.innerText = formatarMoeda(totalPendente);
+        const elGeral = document.getElementById('dash-total-geral'); if(elGeral) elGeral.innerText = formatarMoeda(totalPago + totalPendente);
+        
+        const elPrev = document.getElementById('dash-total-previsao'); if(elPrev) elPrev.innerText = formatarMoeda(totalProjetado);
+        const elPrevLabel = document.getElementById('dash-previsao-label'); if(elPrevLabel) elPrevLabel.innerText = `Acumulado estimado até o fim de ${endFilterDate.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})}`;
+
+        const listContainer = document.getElementById('dash-chart-container');
+        if(listContainer) {
+            listContainer.innerHTML = '';
+            const t = temas[temaAtual];
+
+            if(contasFiltradas.length === 0) {
+                listContainer.innerHTML = `<p class="text-center text-sm text-gray-400 py-6">Nenhum registro lançado neste período.</p>`;
+                return;
+            }
+
+            if (itemSelecionado === 'todos' && periodoVal !== 'custom' && periodoVal !== 'maximo') { 
+                let agrupado = {};
+                contasFiltradas.forEach(c => { if(!agrupado[c.nome]) agrupado[c.nome] = 0; agrupado[c.nome] += c.valor; });
+                Object.entries(agrupado).sort((a,b) => b[1]-a[1]).forEach(([nome, val]) => {
+                     listContainer.innerHTML += `<div class="flex justify-between items-center p-3 rounded-lg ${t.cardBg} border ${t.cardBorder} shadow-sm"><span class="font-bold ${t.textPrimary}">${nome}</span><span class="font-bold ${t.textPrimary}">${formatarMoeda(val)}</span></div>`;
+                });
+                const elTitle = document.getElementById('dash-title-chart'); if(elTitle) elTitle.innerHTML = `<i class="fa-solid fa-list text-indigo-500"></i> Resumo por Item`;
+            } else {
+                contasFiltradas.forEach(c => {
+                    const dateLabel = new Date(c.vencimento).toLocaleDateString('pt-BR', {day:'2-digit', month:'short', year: 'numeric'});
+                    const colorText = c.status === 'pago' ? 'text-green-500' : 'text-red-400';
+                    listContainer.innerHTML += `<div class="flex justify-between items-center p-3 rounded-lg ${t.cardBg} border ${t.cardBorder} shadow-sm"><div><p class="font-bold ${t.textPrimary} text-sm">${c.nome}</p><p class="text-xs ${t.textSecondary}">${dateLabel}</p></div><div class="text-right"><p class="font-bold ${t.textPrimary}">${formatarMoeda(c.valor)}</p><p class="text-[10px] font-bold uppercase ${colorText}">${c.status}</p></div></div>`;
+                });
+                const elTitle = document.getElementById('dash-title-chart'); if(elTitle) elTitle.innerHTML = `<i class="fa-solid fa-clock-rotate-left text-indigo-500"></i> Extrato Detalhado`;
+            }
+        }
+    }
+
+    function calcularPrevisao(inicio, fim, itemNome) {
+        let total = 0;
+        const existentes = contas.filter(c => { if (c.type !== 'mensal') return false; if (itemNome !== 'todos' && c.nome !== itemNome) return false; const d = new Date(c.vencimento); return d >= inicio && d <= fim; });
+        total += existentes.reduce((acc, c) => acc + c.valor, 0);
+        const roots = [...new Set(contas.filter(c => c.rootId).map(c => c.rootId))];
+        roots.forEach(rId => {
+            const historico = contas.filter(c => c.rootId === rId).sort((a,b) => new Date(a.vencimento) - new Date(b.vencimento));
+            const ultima = historico[historico.length - 1];
+            if (itemNome !== 'todos' && ultima.nome !== itemNome) return;
+            if (ultima.encerrado || ultima.quitado) return;
+            let dataProj = new Date(ultima.vencimento);
+            dataProj.setMonth(dataProj.getMonth() + 1);
+            while (dataProj <= fim) {
+                if (dataProj >= inicio) {
+                    let deveSomar = false;
+                    if (ultima.recorrencia) { deveSomar = true; } 
+                    else if (ultima.parcelas) {
+                        const mesesDiff = (dataProj.getFullYear() - new Date(ultima.vencimento).getFullYear()) * 12 + (dataProj.getMonth() - new Date(ultima.vencimento).getMonth());
+                        const parcelaVirtual = ultima.parcelas.atual + mesesDiff;
+                        if (parcelaVirtual <= ultima.parcelas.total) { deveSomar = true; } else { break; }
+                    }
+                    if (deveSomar) {
+                        const jaExiste = contas.some(c => c.rootId === rId && new Date(c.vencimento).getTime() === dataProj.getTime());
+                        if (!jaExiste) { total += ultima.valor; }
+                    }
+                }
+                dataProj.setMonth(dataProj.getMonth() + 1);
+            }
+        });
+        return total;
+    }
+
+    function mudarTema(nomeTema) {
+        temaAtual = nomeTema;
+        const t = temas[nomeTema];
+        const elBody = document.getElementById('body-global'); if(elBody) elBody.className = t.body;
+        const elApp = document.getElementById('app-container'); if(elApp) elApp.className = `mobile-container ${t.container}`;
+        const elHeader = document.getElementById('header-home'); if(elHeader) elHeader.className = `${t.headerHome} text-white p-6 rounded-b-3xl shadow-lg relative z-10`;
+        const elNavMes = document.getElementById('nav-mes-container'); if(elNavMes) elNavMes.className = `flex items-center justify-between w-full ${t.navMesBg} p-2 rounded-xl border ${t.navMesBorder}`;
+        const elTitMes = document.getElementById('titulo-mes'); if(elTitMes) elTitMes.className = `font-bold text-lg mx-2 min-w-[140px] text-center ${t.navMesText}`;
+        ['btn-prev-mes', 'btn-next-mes'].forEach(id => { const el = document.getElementById(id); if(el) el.className = `w-8 h-8 flex items-center justify-center rounded-full shadow hover:opacity-80 transition ${t.navBtnBg} ${t.navBtnText}`; });
+        const elTitDiv = document.getElementById('titulo-dividas'); if(elTitDiv) elTitDiv.className = `font-bold text-lg ${t.textPrimary}`;
+        const elNavBot = document.getElementById('nav-bottom'); if(elNavBot) elNavBot.className = `fixed bottom-0 left-0 right-0 ${t.navBg} border-t ${t.navBorder} flex justify-around items-center h-16 max-w-[480px] mx-auto z-40`;
+        atualizarAbas();
+        
+        const elBtnAdd = document.getElementById('btn-add'); if(elBtnAdd) elBtnAdd.className = `fixed bottom-20 right-[calc(50%-20px)] mobile-fab w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl transition transform hover:scale-110 active:scale-95 z-50 ${t.btnAdd}`;
+        const elBtnAcc = document.getElementById('btn-add-acesso'); if(elBtnAcc) elBtnAcc.className = `hidden fixed bottom-20 right-[calc(50%-20px)] mobile-fab bg-slate-800 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl hover:bg-slate-700 transition transform hover:scale-110 active:scale-95 z-50`;
+
+        const elDashTitle = document.getElementById('dash-title-chart'); if(elDashTitle) elDashTitle.className = `font-bold text-lg mb-4 flex items-center gap-2 ${t.textPrimary}`;
+        const elDashTot = document.getElementById('dash-total-geral'); if(elDashTot) elDashTot.className = `text-2xl font-bold ${t.highlight}`;
+        
+        const selects = document.querySelectorAll('select');
+        selects.forEach(sel => { sel.className = `w-full appearance-none ${t.selectBg} border ${t.navMesBorder} ${t.selectText} py-3 px-3 pr-8 rounded-xl font-bold text-sm focus:outline-none focus:border-indigo-500 shadow-sm`; });
+
+        ['modal-content', 'modal-nova-content', 'modal-dia-content', 'modal-novo-acesso-content'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.className = `${t.modalBg} w-full max-w-[480px] rounded-t-3xl sm:rounded-2xl p-6 transform transition-all animate-slide-up shadow-2xl border ${t.cardBorder} ${id === 'modal-nova-content' ? 'h-[90vh] overflow-y-auto' : (id === 'modal-dia-content' ? 'h-[70vh] flex flex-col' : 'relative')}`;
+        });
+        const elModNome = document.getElementById('modal-nome'); if(elModNome) elModNome.className = `text-2xl font-bold leading-tight truncate ${t.modalText}`;
+        const elModVal = document.getElementById('modal-valor'); if(elModVal) elModVal.className = `text-4xl font-extrabold my-1 ${t.highlight}`;
+        const elTitDia = document.getElementById('titulo-dia'); if(elTitDia) elTitDia.className = `text-xl font-bold ${t.modalText}`;
+        const elAccTitle = document.getElementById('acessos-title'); if(elAccTitle) elAccTitle.className = `text-2xl font-bold mb-2 ${t.wallTitle}`;
+
+        const inputs = document.querySelectorAll('input:not([type=radio]), textarea');
+        inputs.forEach(input => { input.className = `w-full ${t.inputBg} border ${t.inputBorder} ${t.inputText} rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-sm`; });
+
+        if(!document.getElementById('modal-novo-acesso').classList.contains('hidden')) { toggleAcessoType(document.getElementById('acc-type').value); }
+
+        renderizarTudo();
+        renderizarAcessos(); 
+        atualizarPinUI();
+        renderizarDash();
+    }
+
+    function mudarMes(delta) { dataNavegacao.setMonth(dataNavegacao.getMonth() + delta); renderizarTudo(); }
+    function renderizarCalendario(mes, ano) { const calContainer = document.getElementById('calendar-days'); if(!calContainer) return; calContainer.innerHTML = ''; const primeiroDia = new Date(ano, mes, 1).getDay(); const diasNoMes = new Date(ano, mes + 1, 0).getDate(); const t = temas[temaAtual]; for (let i = 0; i < primeiroDia; i++) calContainer.innerHTML += `<div></div>`; for (let dia = 1; dia <= diasNoMes; dia++) { const contasDoDia = contas.filter(c => { if (c.type !== 'mensal') return false; const d = new Date(c.vencimento); return d.getUTCFullYear() === ano && d.getUTCMonth() === mes && d.getUTCDate() === dia; }); let bolinhasHTML = ''; if (contasDoDia.length > 0) { const temPendente = contasDoDia.some(c => c.status !== 'pago'); if (temPendente) bolinhasHTML = `<div class="dot-container"><div class="dot bg-red-500"></div></div>`; else bolinhasHTML = `<div class="dot-container"><div class="dot bg-green-500"></div></div>`; } const hoje = new Date(); const ehHoje = hoje.getDate() === dia && hoje.getMonth() === mes && hoje.getFullYear() === ano; const styleHoje = ehHoje ? 'border-2 border-indigo-500 text-indigo-600' : ''; calContainer.innerHTML += `<div class="calendar-day ${t.calDayBg} ${t.calDayHover} ${styleHoje} ${t.textPrimary}" onclick="abrirResumoDia(${dia}, ${mes}, ${ano})"><span class="mb-1">${dia}</span>${bolinhasHTML}</div>`; } }
+    function trocarAba(aba) { ['view-home', 'view-metas', 'view-calendario', 'view-acessos', 'view-dash'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); }); const navMes = document.getElementById('nav-mes-wrapper'); if(navMes) navMes.classList.remove('hidden'); const headHome = document.getElementById('header-home'); if(headHome) headHome.classList.remove('hidden'); const btnAdd = document.getElementById('btn-add'); const btnAddAcesso = document.getElementById('btn-add-acesso'); if(btnAdd) btnAdd.classList.add('hidden'); if(btnAddAcesso) btnAddAcesso.classList.add('hidden'); if (aba === 'home') { document.getElementById('view-home').classList.remove('hidden'); if(btnAdd) btnAdd.classList.remove('hidden'); } else if (aba === 'calendario') { document.getElementById('view-calendario').classList.remove('hidden'); } else if (aba === 'dash') { document.getElementById('view-dash').classList.remove('hidden'); document.getElementById('nav-mes-wrapper').classList.add('hidden'); } else if (aba === 'metas') { document.getElementById('view-metas').classList.remove('hidden'); document.getElementById('nav-mes-wrapper').classList.add('hidden'); document.getElementById('header-home').classList.add('hidden'); if(btnAdd) btnAdd.classList.remove('hidden'); } else if (aba === 'acessos') { document.getElementById('view-acessos').classList.remove('hidden'); document.getElementById('nav-mes-wrapper').classList.add('hidden'); document.getElementById('header-home').classList.add('hidden'); if(document.getElementById('login-wall').classList.contains('hidden') && btnAddAcesso) { btnAddAcesso.classList.remove('hidden'); } } atualizarAbas(aba); renderizarDash(); }
+    function atualizarAbas(aba) { const t = temas[temaAtual]; ['tab-home', 'tab-calendario', 'tab-dash', 'tab-metas', 'tab-acessos'].forEach(tabId => { const el = document.getElementById(tabId); if(el) { const isActive = tabId === `tab-${aba}`; const colorClass = isActive ? t.navActive : t.navInactive; el.className = `flex flex-col items-center ${colorClass} flex-1 h-full justify-center transition`; } }); }
+    function addPin(num) { if(pinDigitado.length < 4) { pinDigitado += num; atualizarPinUI(); if(pinDigitado.length === 4) verificarPin(); } }
+    function clearPin() { pinDigitado = ""; atualizarPinUI(); }
+    function atualizarPinUI() { const t = temas[temaAtual]; for(let i=1; i<=4; i++) { const dot = document.getElementById(`dot-${i}`); if(dot) { if(i <= pinDigitado.length) { dot.className = `pin-dot w-4 h-4 rounded-full border-2 transition-all ${t.pinFilled}`; } else { dot.className = `pin-dot w-4 h-4 rounded-full border-2 transition-all ${t.pinEmpty}`; } } } }
+    function verificarPin() { setTimeout(() => { if(pinDigitado === PIN_CORRETO) { document.getElementById('login-wall').classList.add('hidden'); document.getElementById('acessos-content').classList.remove('hidden'); document.getElementById('btn-add-acesso').classList.remove('hidden'); renderizarAcessos(); } else { showToast("Senha incorreta!", "error"); pinDigitado = ""; atualizarPinUI(); } }, 200); }
+    function bloquearAcessos() { pinDigitado = ""; atualizarPinUI(); document.getElementById('login-wall').classList.remove('hidden'); document.getElementById('acessos-content').classList.add('hidden'); document.getElementById('btn-add-acesso').classList.add('hidden'); }
+    function renderizarAcessos() { const lista = document.getElementById('lista-credenciais'); if(!lista) return; lista.innerHTML = ''; const t = temas[temaAtual]; const isDark = temaAtual === 'escuro'; acessos.forEach(acc => { const elId = `pass-${acc.id}`; let contentHtml = ''; if (acc.type === 'note') { contentHtml = `<div class="mt-2 p-4 rounded-lg border ${t.noteBg} ${t.noteBorder} ${t.noteText} text-sm relative shadow-sm"><div class="absolute top-[-8px] left-[50%] transform translate-x-[-50%] bg-yellow-200 w-16 h-2 opacity-50 rounded"></div>${acc.obs}</div>`; } else { let obsHtml = ''; if(acc.obs) { const noteClass = isDark ? 'bg-yellow-900/30 border-yellow-900/50 text-yellow-200' : 'bg-yellow-50 border-yellow-100 text-gray-600'; const noteIcon = isDark ? 'text-yellow-500' : 'text-yellow-600'; obsHtml = `<div class="mt-3 p-3 rounded-lg border ${noteClass} text-xs relative"><div class="font-bold mb-1 ${noteIcon} flex items-center gap-1"><i class="fa-regular fa-note-sticky"></i> Nota:</div>${acc.obs}</div>`; } contentHtml = `<div class="flex justify-between items-start mb-2"><a href="${acc.link}" target="_blank" class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded hover:bg-slate-200 ml-auto">Ir para site <i class="fa-solid fa-external-link-alt ml-1"></i></a></div><div class="space-y-2"><div class="flex justify-between items-center bg-gray-50/50 p-2 rounded border border-gray-100"><span class="text-xs text-gray-500 font-mono truncate w-40">${acc.user}</span><button onclick="copiarTexto('${acc.user}')" class="text-indigo-500 hover:text-indigo-700"><i class="fa-regular fa-copy"></i></button></div><div class="flex justify-between items-center bg-gray-50/50 p-2 rounded border border-gray-100"><span id="${elId}" class="text-xs text-gray-500 font-mono">••••••••</span><div class="flex gap-3"><button onclick="togglePass('${elId}', '${acc.pass}')" class="text-gray-400 hover:text-gray-600"><i class="fa-regular fa-eye"></i></button><button onclick="copiarTexto('${acc.pass}')" class="text-indigo-500 hover:text-indigo-700"><i class="fa-regular fa-copy"></i></button></div></div></div>${obsHtml}`; } const icon = acc.type === 'note' ? 'fa-sticky-note' : 'fa-globe'; const iconBg = acc.type === 'note' ? 'bg-yellow-100 text-yellow-600' : 'bg-slate-100 text-slate-600'; lista.innerHTML += `<div class="${t.cardBg} p-4 rounded-xl border ${t.cardBorder} shadow-sm"><div class="flex items-center gap-2 mb-2"><div class="w-8 h-8 rounded-full ${iconBg} flex items-center justify-center"><i class="fa-solid ${icon}"></i></div><h3 class="font-bold ${t.textPrimary}">${acc.nome}</h3></div>${contentHtml}<button onclick="deletarAcesso(${acc.id})" class="mt-2 text-xs text-red-400 hover:text-red-600 w-full text-right">Excluir</button></div>`; }); }
+    function togglePass(elId, pass) { const el = document.getElementById(elId); if(el.innerText.includes('•')) el.innerText = pass; else el.innerText = '••••••••'; }
+    function copiarTexto(txt) { navigator.clipboard.writeText(txt); showToast("Copiado!", "info"); }
+    function deletarAcesso(id) { if(confirm("Excluir este acesso?")) { acessos = acessos.filter(a => a.id !== id); renderizarAcessos(); } }
+    function abrirModalNovoAcesso() { document.getElementById('modal-novo-acesso').classList.remove('hidden'); toggleAcessoType('login'); mudarTema(temaAtual); }
+    function fecharModalNovoAcesso() { document.getElementById('modal-novo-acesso').classList.add('hidden'); }
+    function toggleAcessoType(type) { document.getElementById('acc-type').value = type; const btnLogin = document.getElementById('btn-type-login'); const btnNote = document.getElementById('btn-type-note'); const fieldsLogin = document.getElementById('fields-login'); const isDark = temaAtual === 'escuro'; const activeStyle = isDark ? 'py-2 border-2 border-indigo-500 bg-indigo-900/20 text-indigo-300 rounded-lg font-bold text-sm w-full transition' : 'py-2 border-2 border-indigo-600 bg-indigo-50 text-indigo-700 rounded-lg font-bold text-sm w-full transition'; const inactiveStyle = isDark ? 'py-2 border-2 border-neutral-700 text-gray-500 rounded-lg font-bold text-sm hover:bg-neutral-800 w-full transition' : 'py-2 border-2 border-gray-200 text-gray-500 rounded-lg font-bold text-sm hover:bg-gray-50 w-full transition'; if(type === 'login') { btnLogin.className = activeStyle; btnNote.className = inactiveStyle; fieldsLogin.classList.remove('hidden'); } else { btnNote.className = activeStyle; btnLogin.className = inactiveStyle; fieldsLogin.classList.add('hidden'); } }
+    function salvarNovoAcesso() { const type = document.getElementById('acc-type').value; const nome = document.getElementById('acc-nome').value; const obs = document.getElementById('acc-obs').value; let novoItem = { id: Date.now(), type, nome, obs }; if(type === 'login') { const user = document.getElementById('acc-user').value; const pass = document.getElementById('acc-pass').value; const link = document.getElementById('acc-link').value || '#'; if(!nome || !user || !pass) { showToast("Preencha Login/Senha!", "error"); return; } novoItem.user = user; novoItem.pass = pass; novoItem.link = link; } else { if(!nome || !obs) { showToast("Preencha Título e Nota!", "error"); return; } } acessos.push(novoItem); renderizarAcessos(); fecharModalNovoAcesso(); document.getElementById('acc-nome').value = ''; document.getElementById('acc-user').value = ''; document.getElementById('acc-pass').value = ''; document.getElementById('acc-link').value = ''; document.getElementById('acc-obs').value = ''; }
+    function criarCardHTML(conta) { const t = temas[temaAtual]; const isDark = temaAtual === 'escuro'; let corStatus, icone, bordaEsquerda = ''; if (conta.type === 'divida') bordaEsquerda = conta.status === 'pago' ? 'border-l-4 border-green-500' : 'border-l-4 border-orange-500'; switch(conta.status) { case 'pago': corStatus = isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'; icone = 'fa-check-circle'; break; case 'atrasado': corStatus = isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'; icone = 'fa-circle-exclamation'; break; default: corStatus = isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'; icone = 'fa-clock'; } let badge = ''; if (conta.parcelas) badge = `<span class="ml-2 bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-full">${conta.parcelas.atual}/${conta.parcelas.total}</span>`; else if (conta.recorrencia) badge = `<span class="ml-2 bg-blue-50 text-blue-500 text-[10px] font-bold px-2 py-0.5 rounded-full"><i class="fa-solid fa-rotate"></i></span>`; else if (conta.quitado) badge = `<span class="ml-2 bg-green-100 text-green-600 text-[10px] font-bold px-2 py-0.5 rounded-full">QUITADO</span>`; return `<div onclick="abrirModal(${conta.id})" class="${t.cardBg} p-4 rounded-xl shadow-sm border ${t.cardBorder} flex justify-between items-center cursor-pointer hover:opacity-90 active:scale-[0.98] transition ${bordaEsquerda}"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full flex items-center justify-center text-lg ${corStatus} rounded-full"><i class="fa-solid ${icone}"></i></div><div><div class="flex items-center"><h3 class="font-bold ${t.textPrimary} text-sm">${conta.nome}</h3>${badge}</div><p class="text-xs ${t.textSecondary}">Vence: ${new Date(conta.vencimento).toLocaleDateString('pt-BR', {day:'2-digit', month:'short'})}</p></div></div><div class="text-right"><p class="font-bold ${t.textPrimary}">${formatarMoeda(conta.valor)}</p></div></div>`; }
+    function gerarContasFuturas(mesAlvo, anoAlvo) { const roots = [...new Set(contas.filter(c => c.rootId).map(c => c.rootId))]; roots.forEach(rId => { const historico = contas.filter(c => c.rootId === rId).sort((a,b) => new Date(a.vencimento) - new Date(b.vencimento)); const ultima = historico[historico.length - 1]; if (ultima.encerrado || ultima.quitado) return; const dataUltima = new Date(ultima.vencimento); if (anoAlvo > dataUltima.getUTCFullYear() || (anoAlvo === dataUltima.getUTCFullYear() && mesAlvo > dataUltima.getUTCMonth())) { if (ultima.parcelas) { if (ultima.parcelas.atual < ultima.parcelas.total) { const novaAtual = ultima.parcelas.atual + 1; criarProximaOcorrencia(ultima, mesAlvo, anoAlvo, { atual: novaAtual, total: ultima.parcelas.total }); } } else if (ultima.recorrencia) { criarProximaOcorrencia(ultima, mesAlvo, anoAlvo, null); } } }); }
+    function criarProximaOcorrencia(ultima, mesAlvo, anoAlvo, novasParcelas) { const jaExiste = contas.some(c => { const d = new Date(c.vencimento); return c.rootId === ultima.rootId && d.getUTCMonth() === mesAlvo && d.getUTCFullYear() === anoAlvo; }); if (!jaExiste) { let novaData = new Date(Date.UTC(anoAlvo, mesAlvo, new Date(ultima.vencimento).getUTCDate())); if (novaData.getUTCMonth() !== mesAlvo) novaData = new Date(Date.UTC(anoAlvo, mesAlvo + 1, 0)); contas.push({ ...ultima, id: Math.max(...contas.map(c=>c.id))+1, vencimento: novaData.toISOString().split('T')[0], status: 'pendente', parcelas: novasParcelas, recorrencia: ultima.recorrencia, rootId: ultima.rootId, encerrado: false, quitado: false }); } }
+    function abrirResumoDia(dia, mes, ano) { const contasDoDia = contas.filter(c => { if (c.type !== 'mensal') return false; const d = new Date(c.vencimento); return d.getUTCFullYear() === ano && d.getUTCMonth() === mes && d.getUTCDate() === dia; }); if (contasDoDia.length === 0) return; document.getElementById('titulo-dia').innerText = `Contas do dia ${dia}`; const lista = document.getElementById('lista-contas-dia'); lista.innerHTML = ''; contasDoDia.forEach(conta => { lista.innerHTML += criarCardHTML(conta); }); document.getElementById('modal-dia').classList.remove('hidden'); }
+    function fecharResumoDia() { document.getElementById('modal-dia').classList.add('hidden'); }
+    function abrirModal(id) { contaSelecionadaId = id; const conta = contas.find(c => c.id === id); document.getElementById('modal-nome').innerText = conta.nome; document.getElementById('modal-valor').innerText = formatarMoeda(conta.valor); document.getElementById('modal-vencimento').innerText = `Vence em: ${new Date(conta.vencimento).toLocaleDateString('pt-BR')}`; const btnRec = document.getElementById('btn-cancelar-recorrencia'); const btnQuit = document.getElementById('btn-quitar-parcelas'); btnRec.classList.add('hidden'); btnQuit.classList.add('hidden'); if (conta.recorrencia) btnRec.classList.remove('hidden'); if (conta.parcelas && !conta.quitado && conta.status !== 'pago') btnQuit.classList.remove('hidden'); const badgeP = document.getElementById('modal-parcela'); if(conta.parcelas) { badgeP.innerText = `${conta.parcelas.atual}/${conta.parcelas.total}`; badgeP.classList.remove('hidden'); } else { badgeP.classList.add('hidden'); } document.getElementById('modal-detalhes').classList.remove('hidden'); }
+    function fecharModal() { document.getElementById('modal-detalhes').classList.add('hidden'); document.getElementById('confirm-overlay').classList.add('hidden'); document.getElementById('quitacao-overlay').classList.add('hidden'); contaSelecionadaId = null; }
+    function formatarMoeda(v) { return v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
+    function showToast(msg, type) { const t = document.getElementById('toast'); document.getElementById('toast-msg').innerText = msg; const i = document.getElementById('toast-icon'); i.className = type === 'error' ? "fa-solid fa-circle-xmark text-red-500 text-xl" : type === 'info' ? "fa-solid fa-circle-info text-blue-500 text-xl" : "fa-solid fa-circle-check text-green-600 text-xl"; t.classList.remove('opacity-0'); setTimeout(() => t.classList.add('opacity-0'), 3000); }
+    function confirmarExclusao() { document.getElementById('confirm-title').innerText = "Excluir Conta?"; document.getElementById('confirm-desc').innerText = "Essa conta vai sumir. Se for recorrente/parcelada, apaga todas as futuras também."; document.getElementById('btn-confirm-action').onclick = execExcluirConta; document.getElementById('confirm-overlay').classList.remove('hidden'); }
+    function fecharConfirmacao() { document.getElementById('confirm-overlay').classList.add('hidden'); }
+    function execExcluirConta() { const conta = contas.find(c => c.id === contaSelecionadaId); if (conta) { if (conta.rootId) { const dataRef = new Date(conta.vencimento); contas = contas.filter(c => { if (c.rootId !== conta.rootId) return true; return new Date(c.vencimento) < dataRef; }); } else { contas = contas.filter(c => c.id !== contaSelecionadaId); } showToast("Conta excluída!", "error"); } fecharConfirmacao(); fecharModal(); renderizarTudo(); }
+    function confirmarPararRecorrencia() { document.getElementById('confirm-title').innerText = "Parar Recorrência?"; document.getElementById('confirm-desc').innerText = "Essa conta vai parar de aparecer nos PRÓXIMOS meses. A deste mês continua aqui."; document.getElementById('btn-confirm-action').onclick = execPararRecorrencia; document.getElementById('confirm-overlay').classList.remove('hidden'); }
+    function execPararRecorrencia() { const conta = contas.find(c => c.id === contaSelecionadaId); if(conta) { conta.recorrencia = false; conta.encerrado = true; const dataCancel = new Date(conta.vencimento); contas = contas.filter(c => { if (c.rootId !== conta.rootId) return true; return new Date(c.vencimento) <= dataCancel; }); showToast("Recorrência parada!", "info"); } fecharConfirmacao(); fecharModal(); renderizarTudo(); }
+    function abrirQuitacao() { const conta = contas.find(c => c.id === contaSelecionadaId); quitacaoQtd = 1; atualizarUIQuitacao(conta); document.getElementById('quitacao-overlay').classList.remove('hidden'); }
+    function fecharQuitacao() { document.getElementById('quitacao-overlay').classList.add('hidden'); }
+    function mudarQtdQuitacao(delta) { const conta = contas.find(c => c.id === contaSelecionadaId); const parcelasRestantes = conta.parcelas.total - conta.parcelas.atual + 1; let novaQtd = quitacaoQtd + delta; if (novaQtd < 1) novaQtd = 1; if (novaQtd > parcelasRestantes) novaQtd = parcelasRestantes; quitacaoQtd = novaQtd; atualizarUIQuitacao(conta); }
+    function atualizarUIQuitacao(conta) { document.getElementById('q-qtd').innerText = quitacaoQtd; const valorTotal = conta.valor * quitacaoQtd; document.getElementById('q-valor-unit').innerText = formatarMoeda(conta.valor); document.getElementById('q-total-valor').value = valorTotal.toFixed(2); const inicio = conta.parcelas.atual; const fim = inicio + quitacaoQtd - 1; if (inicio === fim) { document.getElementById('q-resumo-parcelas').innerText = `${inicio}/${conta.parcelas.total}`; } else { document.getElementById('q-resumo-parcelas').innerText = `${inicio} até ${fim} de ${conta.parcelas.total}`; } }
+    function concluirQuitacao() { const conta = contas.find(c => c.id === contaSelecionadaId); if(!conta) return; const valorFinal = parseFloat(document.getElementById('q-total-valor').value); if(isNaN(valorFinal) || valorFinal < 0) { showToast('Valor inválido!', 'error'); return; } const novaUltimaParcelaPaga = conta.parcelas.atual + quitacaoQtd - 1; const parcelasRestantesReais = conta.parcelas.total - novaUltimaParcelaPaga; conta.status = 'pago'; conta.valor = valorFinal; if (parcelasRestantesReais === 0) { conta.nome = `${conta.nome} (Quitado)`; conta.quitado = true; conta.parcelas = null; } else { conta.nome = `${conta.nome} (Antecipado +${quitacaoQtd-1})`; conta.parcelas.atual = novaUltimaParcelaPaga; } const dataAtual = new Date(conta.vencimento); contas = contas.filter(c => { if (c.rootId !== conta.rootId || c.id === conta.id) return true; return new Date(c.vencimento) < dataAtual; }); showToast(`Pagamento de ${formatarMoeda(valorFinal)} confirmado!`, 'success'); fecharQuitacao(); fecharModal(); renderizarTudo(); }
+    function ativarEdicaoValor() { document.getElementById('display-valor').classList.add('hidden'); document.getElementById('input-valor-container').classList.remove('hidden'); document.getElementById('input-valor-container').classList.add('flex'); document.getElementById('input-novo-valor').value = contas.find(c=>c.id===contaSelecionadaId).valor; }
+    function salvarNovoValor() { const v = parseFloat(document.getElementById('input-novo-valor').value); if(v>=0){ contas.find(c=>c.id===contaSelecionadaId).valor = v; document.getElementById('modal-valor').innerText = formatarMoeda(v); renderizarTudo(); document.getElementById('input-valor-container').classList.add('hidden'); document.getElementById('display-valor').classList.remove('hidden'); } }
+    function ativarEdicaoNome() { document.getElementById('display-nome').classList.add('hidden'); document.getElementById('input-nome-container').classList.remove('hidden'); document.getElementById('input-novo-nome').value = contas.find(c=>c.id===contaSelecionadaId).nome; }
+    function salvarNovoNome() { const n = document.getElementById('input-novo-nome').value; if(n){ contas.find(c=>c.id===contaSelecionadaId).nome = n; document.getElementById('modal-nome').innerText = n; renderizarTudo(); document.getElementById('input-nome-container').classList.add('hidden'); document.getElementById('display-nome').classList.remove('hidden'); } }
+    function abrirModalNovaConta() { document.getElementById('modal-nova-conta').classList.remove('hidden'); mudarTema(temaAtual); }
+    function fecharModalNovaConta() { document.getElementById('modal-nova-conta').classList.add('hidden'); }
+    function salvarNovaConta() { const nome = document.getElementById('novo-nome').value; const valor = parseFloat(document.getElementById('novo-valor').value); const data = document.getElementById('novo-vencimento').value; if(nome && valor && data) { const tipo = document.getElementById('novo-tipo').value; let isRec = false; let rootId = null; let parcelasData = null; if (tipo === 'mensal') { const op = document.querySelector('input[name="recorrencia"]:checked').value; if(op === 'fixo') { isRec = true; rootId = 'rec_'+Date.now(); } else if(op === 'parcelado') { const totalP = parseInt(document.getElementById('novo-total-parcelas').value) || 12; parcelasData = { atual: 1, total: totalP }; rootId = 'parc_'+Date.now(); } } contas.push({ id: Date.now(), nome, valor, vencimento: data, categoria: document.getElementById('novo-categoria').value, status: new Date(data) < new Date() ? 'atrasado' : 'pendente', type: tipo, recorrencia: isRec, rootId: rootId, parcelas: parcelasData, encerrado: false, quitado: false }); renderizarTudo(); fecharModalNovaConta(); } }
+    function selecionarTipo(t) { document.getElementById('novo-tipo').value = t; if(t==='mensal') document.getElementById('area-recorrencia').classList.remove('hidden'); else document.getElementById('area-recorrencia').classList.add('hidden'); }
+    function toggleParcelas(b) { if(b) document.getElementById('input-qtd-parcelas').classList.remove('hidden'); else document.getElementById('input-qtd-parcelas').classList.add('hidden'); }
+    function alterarStatus(s) { if(contaSelecionadaId) { contas.find(c=>c.id===contaSelecionadaId).status=s; renderizarTudo(); fecharModal(); showToast('Pago!','success'); } }
+    function cobrarNoZap() { const c = contas.find(k=>k.id===contaSelecionadaId); window.open(`https://wa.me/?text=Pagar conta ${c.nome} valor ${formatarMoeda(c.valor)}`,'_blank'); }
+    function adicionarAoCalendario() { const c = contas.find(k=>k.id===contaSelecionadaId); window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=Pagar ${c.nome}&details=${formatarMoeda(c.valor)}`,'_blank'); }
+
+    // Init
+    mudarTema('claro');
+</script>
+</body>
+</html>
